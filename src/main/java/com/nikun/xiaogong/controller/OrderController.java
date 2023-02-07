@@ -9,6 +9,7 @@ import com.nikun.xiaogong.entity.Orders;
 import com.nikun.xiaogong.service.OrderDetailService;
 import com.nikun.xiaogong.service.OrderService;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang.StringUtils;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
@@ -42,7 +43,7 @@ public class OrderController {
     }
 
     /**
-     * 订单信息分页查询
+     * 前台订单信息分页查询
      * @param page
      * @param pageSize
      * @return
@@ -100,6 +101,47 @@ public class OrderController {
         orderService.again(orderId);
 
         return R.success("再来一单成功");
+    }
+
+    /**
+     * 后台订单信息分页查询
+     * @param page
+     * @param pageSize
+     * @param number
+     * @param beginTime
+     * @param endTime
+     * @return
+     */
+    @GetMapping("/page")
+    public R<Page> page(int page, int pageSize, String number, String beginTime, String endTime) {
+
+        // 构造分页构造器
+        Page<Orders> pageInfo = new Page<>();
+
+        // 构造条件构造器
+        LambdaQueryWrapper<Orders> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.eq(StringUtils.isNotEmpty(number), Orders::getNumber, number)
+                .gt(StringUtils.isNotEmpty(beginTime), Orders::getOrderTime, beginTime)
+                .lt(StringUtils.isNotEmpty(endTime), Orders::getOrderTime, endTime);
+
+        // 执行分页查询
+        orderService.page(pageInfo,queryWrapper);
+
+        return R.success(pageInfo);
+    }
+
+    /**
+     * 后台订单状态修改
+     * @param orders
+     * @return
+     */
+    @PutMapping
+    public R<String> updateStatus(@RequestBody Orders orders) {
+
+        orderService.updateById(orders);
+
+        return R.success("订单状态修改成功");
+
     }
 
 }
