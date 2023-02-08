@@ -18,12 +18,14 @@ import com.nikun.xiaogong.service.SetmealService;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -40,6 +42,9 @@ public class DishServiceImpl extends ServiceImpl<DishMapper, Dish> implements Di
 
     @Autowired
     private SetmealService setmealService;
+
+    @Autowired
+    private RedisTemplate redisTemplate;
 
     @Value("${reggie.path}")
     private String basePath;
@@ -62,6 +67,10 @@ public class DishServiceImpl extends ServiceImpl<DishMapper, Dish> implements Di
 
         // 保存菜品口味数据到菜品口味表dish_flavor
         dishFlavorService.saveBatch(dishFlavors);
+
+        // 清理某个分类下面的菜品缓存数据
+        String dishKey = "dish_" + dishDto.getCategoryId() + "_1";
+        redisTemplate.delete(dishKey);
 
     }
 
@@ -109,12 +118,13 @@ public class DishServiceImpl extends ServiceImpl<DishMapper, Dish> implements Di
         this.removeByIds(ids);
 
         // 删除菜品口味表中对应菜品id的数据（用到了新写Mapper方法和Mapper对应的映射文件）
-        ids.forEach(item -> dishFlavorMapper.deleteByDishId(Long.parseLong(item)));
+        // 别用这个方法，调用了好几次数据库
+        //ids.forEach(item -> dishFlavorMapper.deleteByDishId(Long.parseLong(item)));
 
         // 如下方式也可以进行删除口味表，更简洁一些
-        /*LambdaQueryWrapper<DishFlavor> queryWrapper2 = new LambdaQueryWrapper<>();
-        queryWrapper2.in(DishFlavor::getDishId, ids);
-        dishFlavorService.remove(queryWrapper2);*/
+        LambdaQueryWrapper<DishFlavor> queryWrapper3 = new LambdaQueryWrapper<>();
+        queryWrapper3.in(DishFlavor::getDishId, ids);
+        dishFlavorService.remove(queryWrapper3);
     }
 
     /**
@@ -172,6 +182,10 @@ public class DishServiceImpl extends ServiceImpl<DishMapper, Dish> implements Di
         // 执行插入
         dishFlavorService.saveBatch(flavors);
 
+        // 清理某个分类下面的菜品缓存数据
+        String dishKey = "dish_" + dishDto.getCategoryId() + "_1";
+        redisTemplate.delete(dishKey);
+
     }
 
     /**
@@ -197,21 +211,22 @@ public class DishServiceImpl extends ServiceImpl<DishMapper, Dish> implements Di
                 return setmealId;
             }).collect(Collectors.toList());
 
-            // 根据setmealId查询setmeal表
-            LambdaQueryWrapper<Setmeal> queryWrapper2 = new LambdaQueryWrapper<>();
-            queryWrapper2.in(Setmeal::getId, setmealIdList).eq(Setmeal::getStatus, 1);
-            List<Setmeal> setmealList = setmealService.list(queryWrapper2);
+            // 如果存在对应套餐，根据setmealId查询setmeal表
+            if(setmealDishList.size() > 0) {
+                LambdaQueryWrapper<Setmeal> queryWrapper2 = new LambdaQueryWrapper<>();
+                queryWrapper2.in(Setmeal::getId, setmealIdList).eq(Setmeal::getStatus, 1);
+                List<Setmeal> setmealList = setmealService.list(queryWrapper2);
 
-            // 如果有对应的套餐就把套餐停售
-            if(setmealList.size() > 0) {
+                // 如果有对应的套餐就把套餐停售
+                if(setmealList.size() > 0) {
 
-                setmealList.forEach(item ->{
-                    item.setStatus(0);
-                });
+                    setmealList.forEach(item ->{
+                        item.setStatus(0);
+                    });
 
-                setmealService.updateBatchById(setmealList);
+                    setmealService.updateBatchById(setmealList);
+                }
             }
-
         }
 
         List<Dish> list = new ArrayList<>();
@@ -224,6 +239,11 @@ public class DishServiceImpl extends ServiceImpl<DishMapper, Dish> implements Di
         });
 
         this.updateBatchById(list);
+
+        // 清理所有菜品的缓存数据
+        // 这里清楚所有菜品缓存是因为没有categoryId，想获得还得从数据库查，不如直接清理缓存
+        Set keys = redisTemplate.keys("dish_*");
+        Long delete = redisTemplate.delete(keys);
 
         String result = (status == 0) ? "菜品已停售" : "菜品已起售";
 
