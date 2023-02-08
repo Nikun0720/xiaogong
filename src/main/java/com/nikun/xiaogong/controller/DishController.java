@@ -7,16 +7,18 @@ import com.nikun.xiaogong.dto.DishDto;
 import com.nikun.xiaogong.entity.Category;
 import com.nikun.xiaogong.entity.Dish;
 import com.nikun.xiaogong.service.CategoryService;
-import com.nikun.xiaogong.service.DishFlavorService;
 import com.nikun.xiaogong.service.DishService;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang.StringUtils;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
@@ -31,10 +33,10 @@ public class DishController {
     private DishService dishService;
 
     @Autowired
-    private DishFlavorService dishFlavorService;
+    private CategoryService categoryService;
 
     @Autowired
-    private CategoryService categoryService;
+    private RedisTemplate redisTemplate;
 
     /**
      * 新增菜品
@@ -187,6 +189,20 @@ public class DishController {
     public R<List<DishDto>> list(Dish dish) {
         // 这里传过来的实体类参数，只要里面属性里有对应请求参数的属性，就可以传过来这个实体类参数
 
+        List<DishDto> dishDtoList = null;
+
+        // 动态构造key
+        String key = "dish_" + dish.getCategoryId() + "_" + dish.getStatus();    // 例如：dish_1397844263642378242_1
+
+        // 先从redis中获取缓存数据
+        dishDtoList  = (List<DishDto>) redisTemplate.opsForValue().get(key);
+
+        // 如果存在，直接返回，无需查询数据库
+        if(dishDtoList != null) {
+            return R.success(dishDtoList);
+        }
+
+        // 如果不存在，需要查询数据库
         // 构造查询条件
         LambdaQueryWrapper<Dish> queryWrapper = new LambdaQueryWrapper<>();
         // 根据菜品种类查询
@@ -197,7 +213,7 @@ public class DishController {
         queryWrapper.orderByAsc(Dish::getSort).orderByDesc(Dish::getUpdateTime);
         List<Dish> list = dishService.list(queryWrapper);
 
-        List<DishDto> dishDtoList = list.stream().map(item -> {
+        dishDtoList = list.stream().map(item -> {
             DishDto dishDto = dishService.getByDishWithFlavor(item);
 
             // 根据分类id查询分类对象
@@ -212,6 +228,9 @@ public class DishController {
 
             return dishDto;
         }).collect(Collectors.toList());
+
+        // 将查询到的菜品数据缓存到redis
+        redisTemplate.opsForValue().set(key, dishDtoList, 60, TimeUnit.MINUTES);
 
         return R.success(dishDtoList);
     }
