@@ -41,7 +41,11 @@ public class LoginCheckFilter implements Filter {
                 "/front/**",
                 "/common/**",
                 "/user/sendMsg",    // 移动端发送短信
-                "/user/login"       // 移动端登录
+                "/user/login",      // 移动端登录
+                "/doc.html",        // 以下均是对swagger的放行
+                "/webjars/**",
+                "/swagger-resources",
+                "/v2/api-docs"
         };
         /*String[] urls = new String[] {
                 "/employee/login",
