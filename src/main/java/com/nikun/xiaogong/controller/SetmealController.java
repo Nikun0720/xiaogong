@@ -17,6 +17,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang.StringUtils;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Arrays;
@@ -49,6 +51,7 @@ public class SetmealController {
      * @return
      */
     @PostMapping
+    @CacheEvict(value = "setmealCache", key = "#setmealDto.categoryId")
     public R<String> save(@RequestBody SetmealDto setmealDto) {
 
         //log.info("setmealDto:{}", setmealDto.toString());
@@ -116,6 +119,9 @@ public class SetmealController {
      * @return
      */
     @PostMapping("/status/{status}")
+    // 清理所有套餐的缓存数据
+    // 这里清除所有套餐缓存是因为没有categoryId，想获得还得从数据库查，不如直接清理缓存
+    @CacheEvict(value = "setmealCache", allEntries = true)
     public R<String> updateStauts(@PathVariable("status") int status, Long[] ids) {
 
         return setmealService.updateStatus(status, ids);
@@ -154,6 +160,7 @@ public class SetmealController {
      * @return
      */
     @PutMapping
+    @CacheEvict(value = "setmealCache", key = "#setmealDto.categoryId")
     public R<String> update(@RequestBody SetmealDto setmealDto) {
 
         setmealService.updateWithDish(setmealDto);
@@ -167,6 +174,7 @@ public class SetmealController {
      * @return
      */
     @GetMapping("/list")
+    @Cacheable(value = "setmealCache", key = "#setmeal.categoryId")
     public R<List<Setmeal>> list(Setmeal setmeal) {
 
         // 创建条件构造器

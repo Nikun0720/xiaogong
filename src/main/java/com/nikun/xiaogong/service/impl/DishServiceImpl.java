@@ -241,9 +241,9 @@ public class DishServiceImpl extends ServiceImpl<DishMapper, Dish> implements Di
         this.updateBatchById(list);
 
         // 清理所有菜品的缓存数据
-        // 这里清楚所有菜品缓存是因为没有categoryId，想获得还得从数据库查，不如直接清理缓存
+        // 这里清除所有菜品缓存是因为没有categoryId，想获得还得从数据库查，不如直接清理缓存
         Set keys = redisTemplate.keys("dish_*");
-        Long delete = redisTemplate.delete(keys);
+        redisTemplate.delete(keys);
 
         String result = (status == 0) ? "菜品已停售" : "菜品已起售";
 
